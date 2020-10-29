@@ -4,6 +4,7 @@ import time
 import argparse
 import torch
 import warnings
+import ntpath
 import numpy as np
 
 from detector import build_detector
@@ -26,8 +27,10 @@ class VideoTracker(object):
             warnings.warn("Running in cpu mode which maybe very slow!", UserWarning)
 
         if args.display:
-            cv2.namedWindow("test", cv2.WINDOW_NORMAL)
-            cv2.resizeWindow("test", args.display_width, args.display_height)
+            cv2.namedWindow("frame1", cv2.WINDOW_NORMAL)
+            cv2.resizeWindow("frame1", args.display_width, args.display_height)
+            cv2.namedWindow("frame2", cv2.WINDOW_NORMAL)
+            cv2.resizeWindow("frame2", args.display_width, args.display_height)
 
         if args.cam != -1:
             print("Using webcam " + str(args.cam))
@@ -44,24 +47,31 @@ class VideoTracker(object):
             assert ret, "Error: Camera error"
             self.im_width = frame.shape[0]
             self.im_height = frame.shape[1]
+            print(self.im_width, self.im_height)
 
         else:
             assert os.path.isfile(self.video_path), "Path error"
             self.vdo.open(self.video_path)
             self.im_width = int(self.vdo.get(cv2.CAP_PROP_FRAME_WIDTH))
             self.im_height = int(self.vdo.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            print(self.im_width, self.im_height)
             assert self.vdo.isOpened()
 
         if self.args.save_path:
             os.makedirs(self.args.save_path, exist_ok=True)
 
             # path of saved video and results
-            self.save_video_path = os.path.join(self.args.save_path, "results.avi")
-            self.save_results_path = os.path.join(self.args.save_path, "results.txt")
+            filename = ntpath.basename(self.video_path).split('.')[0]
+            print(filename)
+            self.save_video_path = os.path.join(self.args.save_path, f'result_{filename}.avi')
+            self.save_results_path = os.path.join(self.args.save_path, f'result_{filename}.txt')
 
             # create video writer
             fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-            self.writer = cv2.VideoWriter(self.save_video_path, fourcc, 20, (self.im_width, self.im_height))
+            if self.args.rotate:
+                self.writer = cv2.VideoWriter(self.save_video_path, fourcc, 20, (self.im_width, self.im_height))
+            else:
+                self.writer = cv2.VideoWriter(self.save_video_path, fourcc, 20, (self.im_height, self.im_width))
 
             # logging
             self.logger.info("Save results to {}".format(self.args.save_path))
@@ -82,13 +92,18 @@ class VideoTracker(object):
 
             start = time.time()
             _, ori_im = self.vdo.retrieve()
-            im = cv2.cvtColor(ori_im, cv2.COLOR_BGR2RGB)
+
+            if self.args.rotate:
+                ori_im = cv2.rotate(ori_im, cv2.cv2.ROTATE_90_CLOCKWISE)
+
+            # preprocess the frames
+            im = self.preprocess_frame(ori_im)
 
             # do detection
             bbox_xywh, cls_conf, cls_ids = self.detector(im)
 
-            # select person class
-            mask = cls_ids == 0
+            # select person and car class
+            mask = cls_ids < 4
 
             bbox_xywh = bbox_xywh[mask]
             # bbox dilation just in case bbox too small, delete this line if using a better pedestrian detector
@@ -113,7 +128,9 @@ class VideoTracker(object):
             end = time.time()
 
             if self.args.display:
-                cv2.imshow("test", ori_im)
+                im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+                cv2.imshow("frame1", ori_im)
+                cv2.imshow("frame2", im)
                 cv2.waitKey(1)
 
             if self.args.save_path:
@@ -126,6 +143,36 @@ class VideoTracker(object):
             self.logger.info("time: {:.03f}s, fps: {:.03f}, detection numbers: {}, tracking numbers: {}" \
                              .format(end - start, 1 / (end - start), bbox_xywh.shape[0], len(outputs)))
 
+    def preprocess_frame(self, im):
+
+        # Increase the brightness and contrast
+        im = cv2.convertScaleAbs(im, alpha=0.4, beta=5)
+
+        # Increase the sharpness
+        im = unsharp_mask(im, amount=2.0)
+
+        # Convert from BGR to YUV
+        img_yuv = cv2.cvtColor(im, cv2.COLOR_BGR2YUV)
+
+        # Equalize the histogram of the Y channel
+        img_yuv[:, :, 0] = cv2.equalizeHist(img_yuv[:, :, 0])
+
+        # # Convert to RGB
+        im = cv2.cvtColor(img_yuv, cv2.COLOR_YUV2RGB)
+
+        return im
+
+def unsharp_mask(image, kernel_size=(5, 5), sigma=1.0, amount=1.0, threshold=0):
+    """Return a sharpened version of the image, using an unsharp mask."""
+    blurred = cv2.GaussianBlur(image, kernel_size, sigma)
+    sharpened = float(amount + 1) * image - float(amount) * blurred
+    sharpened = np.maximum(sharpened, np.zeros(sharpened.shape))
+    sharpened = np.minimum(sharpened, 255 * np.ones(sharpened.shape))
+    sharpened = sharpened.round().astype(np.uint8)
+    if threshold > 0:
+        low_contrast_mask = np.absolute(image - blurred) < threshold
+        np.copyto(sharpened, image, where=low_contrast_mask)
+    return sharpened
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -140,6 +187,7 @@ def parse_args():
     parser.add_argument("--save_path", type=str, default="./output/")
     parser.add_argument("--cpu", dest="use_cuda", action="store_false", default=True)
     parser.add_argument("--camera", action="store", dest="cam", type=int, default="-1")
+    parser.add_argument("--rotate", action="store_true")
     return parser.parse_args()
 
 
