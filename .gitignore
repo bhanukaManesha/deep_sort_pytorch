@@ -11,3 +11,6 @@ build/
 *.avi
 *.so
 *.txt
+.idea
+.DS_Store
+videos
