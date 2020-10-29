@@ -69,9 +69,9 @@ class VideoTracker(object):
             # create video writer
             fourcc = cv2.VideoWriter_fourcc(*'MJPG')
             if self.args.rotate:
-                self.writer = cv2.VideoWriter(self.save_video_path, fourcc, 20, (self.im_width, self.im_height))
-            else:
                 self.writer = cv2.VideoWriter(self.save_video_path, fourcc, 20, (self.im_height, self.im_width))
+            else:
+                self.writer = cv2.VideoWriter(self.save_video_path, fourcc, 20, (self.im_width, self.im_height))
 
             # logging
             self.logger.info("Save results to {}".format(self.args.save_path))
