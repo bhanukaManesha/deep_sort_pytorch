@@ -145,20 +145,18 @@ class VideoTracker(object):
 
     def preprocess_frame(self, im):
 
-        # Increase the brightness and contrast
-        im = cv2.convertScaleAbs(im, alpha=0.4, beta=5)
-
         # Increase the sharpness
-        im = unsharp_mask(im, amount=2.0)
+        im = unsharp_mask(im, amount=0.5)
 
-        # Convert from BGR to YUV
-        img_yuv = cv2.cvtColor(im, cv2.COLOR_BGR2YUV)
+        # Improve color
+        hsvImg = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
+        # multiple by a factor to change the saturation
+        hsvImg[..., 1] = hsvImg[..., 1] * 1.5
 
-        # Equalize the histogram of the Y channel
-        img_yuv[:, :, 0] = cv2.equalizeHist(img_yuv[:, :, 0])
+        # Histogram equalize the v-channel
+        hsvImg[:, :, 2] = cv2.equalizeHist(hsvImg[:, :, 2])
 
-        # # Convert to RGB
-        im = cv2.cvtColor(img_yuv, cv2.COLOR_YUV2RGB)
+        im = cv2.cvtColor(hsvImg, cv2.COLOR_HSV2RGB)
 
         return im
 
