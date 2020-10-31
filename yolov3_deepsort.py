@@ -102,7 +102,7 @@ class VideoTracker(object):
             # do detection
             bbox_xywh, cls_conf, cls_ids = self.detector(im)
 
-            # select person and car class
+            # limit to person and car class
             mask = cls_ids < 4
 
             bbox_xywh = bbox_xywh[mask]
@@ -144,23 +144,37 @@ class VideoTracker(object):
                              .format(end - start, 1 / (end - start), bbox_xywh.shape[0], len(outputs)))
 
     def preprocess_frame(self, im):
+        '''
+        The pre-processing module
+        Args:
+            im: the orginal image
 
+        Returns:
+
+        '''
         # Increase the sharpness
         im = unsharp_mask(im, amount=0.5)
 
-        # Improve color
+        # Convert to HSV color space
         hsvImg = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
-        # multiple by a factor to change the saturation
+
+        # Multiple by a factor to change the saturation
         hsvImg[..., 1] = hsvImg[..., 1] * 1.5
 
         # Histogram equalize the v-channel
         hsvImg[:, :, 2] = cv2.equalizeHist(hsvImg[:, :, 2])
 
+        # Convert to RGB color space for YOLO
         im = cv2.cvtColor(hsvImg, cv2.COLOR_HSV2RGB)
 
         return im
 
 def unsharp_mask(image, kernel_size=(5, 5), sigma=1.0, amount=1.0, threshold=0):
+    '''
+    @author: Soroush
+    @url : https://stackoverflow.com/questions/4993082/how-can-i-sharpen-an-image-in-opencv
+    @date : 9th April 2019
+    '''
     """Return a sharpened version of the image, using an unsharp mask."""
     blurred = cv2.GaussianBlur(image, kernel_size, sigma)
     sharpened = float(amount + 1) * image - float(amount) * blurred
