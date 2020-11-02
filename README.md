@@ -79,7 +79,9 @@ cd ../../..
 Notice:
 If compiling failed, the simplist way is to **Upgrade your pytorch >= 1.1 and torchvision >= 0.3" and you can avoid the troublesome compiling problems which are most likely caused by either `gcc version too low` or `libraries missing`.
 
-5. Run demo
+5. Add the videos into the `videos` folder
+
+6. Run demo and the output videos will be generated in the `output` folder
 ```
 usage: python yolov3_deepsort.py VIDEO_PATH
                                 [--help]
